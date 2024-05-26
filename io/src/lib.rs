@@ -14,7 +14,6 @@ impl Metadata for ProgramMetadata {
     type Others = ();
     type Signal = ();
     type State = Out<ChessState>;
-//    type State = Out<String>;
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
@@ -29,8 +28,8 @@ pub enum ChessMessageIn {
 pub enum ChessMessageOut {
     ResponseString(String),
 //    ResponseStartGame(String),
-    ResponseStatusGame(StatusGame),
-    ResponseAllStatusGame(GameStarted),
+//    ResponseStatusGame(StatusGame),
+    ResponseBoardStatus(GameStarted),
 }
 /* 
 #[derive(Encode, Decode, TypeInfo, Debug)]
@@ -50,7 +49,15 @@ pub enum ResultEnd{
 pub enum StatusGame{
     Started,
     Ended,
-    None,
+}
+
+impl Clone for StatusGame {
+    fn clone(&self) -> Self {
+        match self {
+            StatusGame::Started=>StatusGame::Started,
+            StatusGame::Ended=>StatusGame::Ended,
+        }
+    }
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]

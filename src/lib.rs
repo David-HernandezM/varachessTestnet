@@ -1,5 +1,6 @@
 #![no_std]
-use gstd::{debug, mem::replace, msg, prelude::*, ActorId};
+//use gstd::{debug, mem::replace, msg, prelude::*, ActorId};
+use gstd::{mem::replace, msg, prelude::*, ActorId};
 use varachess_io::*;
 
 static mut CHESS_STATE: Option<ChessState> = None;
@@ -14,9 +15,8 @@ extern "C" fn handle() {
     //debug!(" **Starting handle");
     let action: ChessMessageIn = msg::load().expect("Error in msg::load (handle)");
     let message_response:String;
-    /*let mut chess_state:Option<ChessState> =  unsafe {
-        mem::replace(&mut CHESS_STATE, None)
-    };*/
+    let mut message_out: Option<ChessMessageOut> = None;
+//
     match action {
        ChessMessageIn::RequestBalance(request_balance)=>{
             //debug!(" ** ActorID: {:?}",msg::source());
@@ -30,19 +30,28 @@ extern "C" fn handle() {
                 //debug!(" ** Si hay gas {:?}",gas_balance);
                 message_response=String::from("OK");
             }
+           message_out = Some(ChessMessageOut::ResponseString(message_response));
        }
        ChessMessageIn::StatusGameId(request_game_id)=>{
             //game_id = find_game_status_into_vector(request_game_id);
-            if let Some(game)=find_game_into_vector(request_game_id){
-                debug!(" ** Juego encontrado");
-                debug!(" ** game: {:?}",game);
-                debug!(" ** game_status: {:?}",game.game_status);
-                
-                message_response = String::from("Game_id find");
+            if let Some(game_ref)=find_game_into_vector(request_game_id){
+                //debug!(" ** Juego encontrado");
+                //debug!(" ** game_ref: {:?}",game_ref);
+                //debug!(" ** Pasando a valor propio");
+                let game=GameStarted{
+                    game_id:game_ref.game_id,
+                    game_bet:game_ref.game_bet,
+                    game_player1:game_ref.game_player1,
+                    game_player2:game_ref.game_player2,
+                    game_status:game_ref.game_status.clone(),
+                };
+                //debug!(" ** game propio: {:?}",game);
+                //message_response = String::from("Game_id find");
+                message_out=Some(ChessMessageOut::ResponseBoardStatus(game));
             }
             else {
                 //debug!(" ** Juego NO encontrado");
-                message_response = String::from("Game_id Not found");
+                message_out = Some(ChessMessageOut::ResponseString(String::from("Game_id Not found")));
             }
        }
        ChessMessageIn::RequestStartGame(RequestGameStart) => {
@@ -57,6 +66,8 @@ extern "C" fn handle() {
                 add_game_to_vector(&RequestGameStart,msg::source().clone());
                 message_response = String::from("Game started OK");
             }
+           message_out = Some(ChessMessageOut::ResponseString(message_response));
+
        }
        ChessMessageIn::EndGame(end_game) => {
             let res = end_game_into_vestor(end_game.game_id);
@@ -80,9 +91,12 @@ extern "C" fn handle() {
                 EndGameReturnCodes::GameNotFound=>{message_response=String::from("Error, game not found")}
                 EndGameReturnCodes::NoGames=>{message_response=String::from("Error, there are no games")}
            }
+           message_out = Some(ChessMessageOut::ResponseString(message_response));
        }
    }
-   msg::reply(message_response, 0).expect("Error in reply handle");
+   //debug!(" ** message_out: {:?}",message_out);
+   msg::reply(message_out, 0).expect("Error in reply handle");
+
 }
  
 /*
@@ -150,31 +164,6 @@ pub fn find_game_into_vector<'a>(game_id_to_find: u64) -> Option<&'a GameStarted
         }
     }
 }
-/*
-pub fn find_game_into_vector(game_id_to_find :u64) -> &GameStarted{
-    let game_empty = GameStarted{
-        game_bet:0,
-        game_player1:ActorId::zero(),
-        game_player2:ActorId::zero(),
-        game_id:0,
-        game_status:StatusGame::None,
-    };
-    unsafe {
-        if let Some(chess_state) = &CHESS_STATE {
-            if let Some(game) = chess_state.find_game_by_id(game_id_to_find) {
-                debug!("game find: {:?}",game);
-                return game;
-            }else {
-                debug!(" game not found: {:?}",game_empty);
-                //return (GameStarted{game_id:0,game_bet:0,game_player1:0,game_player2:0,game_status:Ended,};);
-                return &game_empty;
-            }
-        }else {
-            debug!(" Sin juegos: {:?}",game_empty);
-            return &game_empty;
-        }
-    }
-}*/
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
 enum EndGameReturnCodes{
@@ -215,19 +204,3 @@ pub fn end_game_into_vestor(game_id_change: u64) -> EndGameReturnCodes{
     }
     return  code_return;
 }
-
-//Function to find games into the games Vector
-/*/
-pub fn find_game_status_into_vector(game_id_to_find :u64) -> GameStarted{
-    unsafe {
-        if let Some(chess_state) = &CHESS_STATE {
-            if let Some(_game) = chess_state.find_game_by_id(game_id_to_find) {
-                return _game;
-            }else {
-                return None;
-            }
-        }else {
-            return None;
-        }
-    }
-}*/
