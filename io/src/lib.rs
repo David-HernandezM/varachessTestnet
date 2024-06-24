@@ -58,14 +58,14 @@ impl Clone for StatusGame {
 #[derive(Encode, Decode, TypeInfo, Debug)]
 pub struct RequestGameStart{
     pub game_id: u64,
-    pub player_bet: u64,
+    pub player_bet: u128,
     pub player1: ActorId,
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
 pub struct GameStarted{
     pub game_id:u64,
-    pub game_bet:u64,
+    pub game_bet:u128,
     pub game_player1:ActorId,
     pub game_player2: ActorId,
     pub game_status: StatusGame,
@@ -87,7 +87,7 @@ impl ChessState {
     pub fn find_game_by_id(&self,game_id_to_find:u64) -> Option<&GameStarted> {
         self.games.iter().find(|game|game.game_id == game_id_to_find)
     }
-    pub fn add_game(&mut self,game_id:u64,game_bet:u64,game_player1:ActorId,game_player2:ActorId,game_status:StatusGame){
+    pub fn add_game(&mut self,game_id:u64,game_bet:u128,game_player1:ActorId,game_player2:ActorId,game_status:StatusGame){
         let new_game = GameStarted{
             game_id,
             game_bet,

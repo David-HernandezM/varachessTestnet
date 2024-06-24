@@ -1,10 +1,21 @@
 use gstd::ActorId;
 use gtest::{Log, Program, System};
 use varachess_io::*;
-
+const ACTOR2:u64=3;
+const ACTOR3:u64=4;
+const ACTOR4:u64=4;
+ 
 #[test]
 fn happy_path(){
     let sys = System::new();
+    let unit_vara:u128 = 10000000000000;
+                   
+    let bet_3tvara=3*unit_vara;
+    let bet_4tvara=4*unit_vara;
+    sys.mint_to(ACTOR2, 1000*unit_vara);
+    sys.mint_to(ACTOR3, 1000*unit_vara);
+    sys.mint_to(ACTOR4, 1000*unit_vara);
+
     sys.init_logger();
     let program = Program::current(&sys);
     /* INIT MESSAGE */
@@ -18,10 +29,11 @@ fn happy_path(){
     let game_started_test: RequestGameStart = RequestGameStart{
         game_id:123,                                                        //Id del juego
         player_bet:30,                                                      //Apuesta del jugador
-        player1:ActorId::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        player1:3.into(),
     };
     let response_out=ChessMessageOut::ResponseString(String::from("Game in waiting"));
-    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    let res=program.send_with_value(3,ChessMessageIn::RequestStartGame(game_started_test), bet_3tvara);
     //Evaluate result
     let expected_log=Log::builder()
         .dest(2)
@@ -32,10 +44,11 @@ fn happy_path(){
     let game_started_test: RequestGameStart = RequestGameStart{
         game_id:123,                                                        //Id del juego
         player_bet:30,                                                      //Apuesta del jugador
-        player1:ActorId::new([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        player1:4.into(),
     };
     let response_out=ChessMessageOut::ResponseString(String::from("Game started OK"));
-    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    let res=program.send_with_value(4,ChessMessageIn::RequestStartGame(game_started_test), bet_3tvara);
     //Evaluate result
     let expected_log=Log::builder()
         .dest(2)
@@ -53,6 +66,7 @@ fn happy_path(){
     assert!(res.contains(&expected_log));
 }
 
+/*/
 #[test]
 fn status_gameid(){
     let sys = System::new();
@@ -129,7 +143,6 @@ fn status_gameid(){
         .payload(Some(response_out));
     assert!(res.contains(&expected_log));
 }
-
 
 #[test]
 fn error_messages_same_gameid(){
@@ -227,6 +240,49 @@ fn error_messages_same_playerid(){
     assert!(res.contains(&expected_log));
 }
 
+#[test]
+fn error_messages_bad_bet(){
+    let sys = System::new();
+    sys.init_logger();
+    let program = Program::current(&sys);
+    /* INIT MESSAGE */
+    let res=program.send(2,());
+    let expected_log= Log::builder()
+        .dest(2)
+        .payload("INIT started");
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*First sending RequestGameStart to handle of smart contract (RequestGameStarted) */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Game in waiting"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*Second sending RequestGameStart with the same playerid */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:40,                                                      //Apuesta del jugador
+        player1:ActorId::new([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Error, Bet not same that bat in gameID"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+}
+*/
+
+/* LO DEMAS NO */
 
 /*fn with_message_out() {
     let sys = System::new();

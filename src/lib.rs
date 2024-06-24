@@ -1,5 +1,6 @@
 #![no_std]
 //use gstd::{debug, mem::replace, msg, prelude::*, ActorId};
+use gcore::exec;
 use gstd::{debug, msg, prelude::*, ActorId};
 use varachess_io::*;
 
@@ -17,7 +18,10 @@ extern "C" fn handle() {
     let action: ChessMessageIn = msg::load().expect("Error in msg::load (handle)");
     let message_response:String;
     let message_out: Option<ChessMessageOut>;
-//
+    let mut balance_game:u128 = 0;
+    let my_balance=exec::value_available();
+    //debug!("  ** This is my balance: {:?}", my_balance);
+
     match action {
        ChessMessageIn::StatusGameId(request_game_id)=>{
             //game_id = find_game_status_into_vector(request_game_id);
@@ -43,6 +47,7 @@ extern "C" fn handle() {
        }
        ChessMessageIn::RequestStartGame(request_game_start) => {
             let res = find_modify_or_add_game(request_game_start);
+            //debug!("  **  El valor de res es : {:?}",res);
             match res{
                 StartGameReturnCodes::GameWaiting=>{
                     message_response = String::from("Game in waiting");
@@ -56,24 +61,36 @@ extern "C" fn handle() {
                 StartGameReturnCodes::PlayerError=>{
                     message_response = String::from("Error, same player ID for both players");
                 }
+                StartGameReturnCodes::BetError=>{
+                    message_response = String::from("Error, Bet not same that bat in gameID");
+                    //debug!(" ** El mensaje a retornar es: {:?}", message_response);
+                }
             }
            message_out = Some(ChessMessageOut::ResponseString(message_response));
        }
        ChessMessageIn::EndGame(end_game) => {
-            let res = end_game_into_vestor(end_game.game_id);
+            let res = end_game_into_vector(end_game.game_id);
             //debug!(" El resultado es: {:?}",res);
             //unsafe {debug!(" ** Despues del end, CHESS_STATE: {:?}",CHESS_STATE);};
-            match res{
+            match res.status_end_game{
                 EndGameReturnCodes::GameEndOk=>{
                     match end_game.result_game{
                         ResultEnd::Win=>{
                             message_response=String::from("Game end OK to Win");
+                            balance_game=res.game_bet*2;
+                            //debug!(" **  Win and Bet: {:?}",res.game_bet);
                         }
                         ResultEnd::Lose=>{
                             message_response=String::from("Game end OK to Lose");
+                            balance_game=0;
+                            //debug!("  **  Lose and Bet: {:?}",res.game_bet);
                         }
                         ResultEnd::Draw=>{
                             message_response=String::from("Game end OK to Draw");
+                            let _ = msg::send(res.player1, message_response.clone(), res.game_bet);
+                            let _ = msg::send(res.player2, message_response.clone(), res.game_bet);
+                            balance_game=0;
+                            //debug!(" **  Draw and Bet: {:?}",res.game_bet);
                         }
                     }
                 }
@@ -85,7 +102,7 @@ extern "C" fn handle() {
        }
    }
    //debug!(" ** message_out: {:?}",message_out);
-   msg::reply(message_out, 0).expect("Error in reply handle");
+   msg::reply(message_out,balance_game).expect("Error in reply handle");
 
 }
  
@@ -156,11 +173,13 @@ pub fn find_game_into_vector<'a>(game_id_to_find: u64) -> Option<&'a GameStarted
 }
 
 //Function to end games into the games Vector
-pub fn end_game_into_vestor(game_id_change: u64) -> EndGameReturnCodes{
+pub fn end_game_into_vector(game_id_change: u64) -> ReturnEndGame{
+    //let code_return:EndGameReturnCodes;
+    let code_return:ReturnEndGame;
+    //let mut bet_game = u64=0;
     let chess_state:Option<ChessState> =  unsafe {
         mem::replace(&mut CHESS_STATE,None )
     };
-    let code_return:EndGameReturnCodes;
     match chess_state{
         Some(mut chess_state)=>{
             if let Some(game) = chess_state.games.iter_mut().find(|game| game.game_id == game_id_change) {
@@ -168,20 +187,40 @@ pub fn end_game_into_vestor(game_id_change: u64) -> EndGameReturnCodes{
                 if let StatusGame::Started = game.game_status {
                     game.game_status=StatusGame::Ended;
                   //  debug!(" ** El estatus ha sido cambiado correctamente");
-                    code_return = EndGameReturnCodes::GameEndOk;
+                    code_return = ReturnEndGame {
+                        status_end_game:EndGameReturnCodes::GameEndOk,
+                        game_bet:game.game_bet,
+                        player1:game.game_player1,
+                        player2:game.game_player2,
+                    }
                 }else {
                 //    debug!(" ** El juego ya había sido finalizado");
-                    code_return = EndGameReturnCodes::GamePrevFinish;
+                    code_return = ReturnEndGame{
+                        status_end_game:EndGameReturnCodes::GamePrevFinish,
+                        game_bet:0,
+                        player1:game.game_player1,
+                        player2:game.game_player2,
+                    }
                 }
             }else {
               //  debug!(" ** Juego no encontrado: {:?}",game_id_change);
-                code_return = EndGameReturnCodes::GameNotFound;
+                code_return = ReturnEndGame{
+                    status_end_game:EndGameReturnCodes::GameNotFound,
+                    game_bet:0,
+                    player1:ActorId::zero(),
+                    player2:ActorId::zero(),
+                }
             }    
             unsafe {CHESS_STATE = Some(chess_state)};
         }
         None =>{
             //debug!(" ** No hay juegos");
-            code_return = EndGameReturnCodes::NoGames;
+            code_return = ReturnEndGame{
+                status_end_game:EndGameReturnCodes::NoGames,
+                game_bet:0,
+                player1:ActorId::zero(),
+                player2:ActorId::zero(),
+            }
         }
     }
     return  code_return;
@@ -193,6 +232,10 @@ pub fn find_modify_or_add_game(game_to_add:RequestGameStart)-> StartGameReturnCo
             if let Some(game) = chess_state.games.iter_mut().find(|g| g.game_id == game_to_add.game_id) {
                 if game.game_player1 == game_to_add.player1{
                     return StartGameReturnCodes::PlayerError;
+                }
+                if game.game_bet != game_to_add.player_bet{
+                    debug!("  ** Error, apuesta distinta");
+                    return StartGameReturnCodes::BetError;
                 }
                 match game.game_status {
                     StatusGame::Ended=>{
@@ -243,6 +286,14 @@ pub fn find_modify_or_add_game(game_to_add:RequestGameStart)-> StartGameReturnCo
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
+pub struct ReturnEndGame{
+    pub status_end_game:EndGameReturnCodes,
+    pub game_bet:u128,
+    pub player1:ActorId,
+    pub player2:ActorId,
+}
+
+#[derive(Encode, Decode, TypeInfo, Debug)]
 pub enum EndGameReturnCodes{
     GameEndOk,
     GamePrevFinish,
@@ -256,4 +307,5 @@ pub enum StartGameReturnCodes{
     GameStarted,
     GameAlreadyStarted,
     PlayerError,
+    BetError,
 }
