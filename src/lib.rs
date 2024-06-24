@@ -16,7 +16,7 @@ extern "C" fn handle() {
     //debug!(" **Starting handle");
     let action: ChessMessageIn = msg::load().expect("Error in msg::load (handle)");
     let message_response:String;
-    let mut message_out: Option<ChessMessageOut> = None;
+    let message_out: Option<ChessMessageOut>;
 //
     match action {
        ChessMessageIn::StatusGameId(request_game_id)=>{
@@ -41,8 +41,8 @@ extern "C" fn handle() {
                 message_out = Some(ChessMessageOut::ResponseString(String::from("Game_id Not found")));
             }
        }
-       ChessMessageIn::RequestStartGame(RequestGameStart) => {
-            let res = find_modify_or_add_game(RequestGameStart);
+       ChessMessageIn::RequestStartGame(request_game_start) => {
+            let res = find_modify_or_add_game(request_game_start);
             match res{
                 StartGameReturnCodes::GameWaiting=>{
                     message_response = String::from("Game in waiting");
@@ -84,7 +84,7 @@ extern "C" fn handle() {
            message_out = Some(ChessMessageOut::ResponseString(message_response));
        }
    }
-   debug!(" ** message_out: {:?}",message_out);
+   //debug!(" ** message_out: {:?}",message_out);
    msg::reply(message_out, 0).expect("Error in reply handle");
 
 }
@@ -226,7 +226,7 @@ pub fn find_modify_or_add_game(game_to_add:RequestGameStart)-> StartGameReturnCo
         else {
             // CHESS_STATE es None
             //debug!(" ** Chess_state is None");
-            unsafe{
+            //unsafe{
                 let chess_state = CHESS_STATE.get_or_insert(ChessState{games:Vec::new()});
                 chess_state.add_game(
                     game_to_add.game_id,
@@ -236,14 +236,14 @@ pub fn find_modify_or_add_game(game_to_add:RequestGameStart)-> StartGameReturnCo
                     StatusGame::Waiting,
                 );
                 //debug!(" ** Juego agregado y vector iniciado: {:?}",chess_state);
-            }
+            //}
             StartGameReturnCodes::GameWaiting
         }
     }
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
-enum EndGameReturnCodes{
+pub enum EndGameReturnCodes{
     GameEndOk,
     GamePrevFinish,
     GameNotFound,
@@ -251,7 +251,7 @@ enum EndGameReturnCodes{
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
-enum StartGameReturnCodes{
+pub enum StartGameReturnCodes{
     GameWaiting,
     GameStarted,
     GameAlreadyStarted,
