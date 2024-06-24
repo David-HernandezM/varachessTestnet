@@ -3,7 +3,232 @@ use gtest::{Log, Program, System};
 use varachess_io::*;
 
 #[test]
-fn with_message_out() {
+fn happy_path(){
+    let sys = System::new();
+    sys.init_logger();
+    let program = Program::current(&sys);
+    /* INIT MESSAGE */
+    let res=program.send(2,());
+    let expected_log= Log::builder()
+        .dest(2)
+        .payload("INIT started");
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*First RequestGameStart sent to handle of smart contract (RequestGameStarted) */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Game in waiting"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*Second RequestGameStart sent to handle of smart contract (RequestGameStarted) */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Game started OK"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*****Third RequestGameStart sent to  handle for end game -> GameEnd Win******/
+    let result_game_tes: ResultEnd = ResultEnd::Win;
+    let game_end_test: GameEnd = GameEnd { game_id: 123, result_game:result_game_tes,position_end_game:String::from("a6")};
+    let response_out = ChessMessageOut::ResponseString(String::from("Game end OK to Win"));
+    let res=program.send(2, ChessMessageIn::EndGame(game_end_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+}
+
+#[test]
+fn status_gameid(){
+    let sys = System::new();
+    sys.init_logger();
+    let program = Program::current(&sys);
+    /* INIT MESSAGE */
+    let res=program.send(2,());
+    let expected_log= Log::builder()
+        .dest(2)
+        .payload("INIT started");
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*First RequestGameStart sent to handle of smart contract (RequestGameStarted) */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Game in waiting"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*Second RequestGameStart sent to handle of smart contract (RequestGameStarted) */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Game started OK"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*****Third RequestGameStart sent to  handle for end game -> GameEnd Win******/
+    let result_game_tes: ResultEnd = ResultEnd::Win;
+    let game_end_test: GameEnd = GameEnd { game_id: 123, result_game:result_game_tes,position_end_game:String::from("a6")};
+    let response_out = ChessMessageOut::ResponseString(String::from("Game end OK to Win"));
+    let res=program.send(2, ChessMessageIn::EndGame(game_end_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*****Send correct game_id to handle of smart contract ******/
+    let game_id_test:u64= 123;
+    let game_out_find = GameStarted{
+        game_id:123,
+        game_bet:30,
+        game_player1:ActorId::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        game_player2:ActorId::new([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        game_status:StatusGame::Ended,    
+    };
+    let response_out = ChessMessageOut::ResponseBoardStatus(game_out_find);
+    let res=program.send(2, ChessMessageIn::StatusGameId(game_id_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    //**********************************************************************/
+    //Send incorrect game_id to handle of smart contract 
+    let game_id_test:u64= 987;
+    let response_out =ChessMessageOut::ResponseString(String::from("Game_id Not found"));
+    let res=program.send(2, ChessMessageIn::StatusGameId(game_id_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+}
+
+
+#[test]
+fn error_messages_same_gameid(){
+    let sys = System::new();
+    sys.init_logger();
+    let program = Program::current(&sys);
+    /* INIT MESSAGE */
+    let res=program.send(2,());
+    let expected_log= Log::builder()
+        .dest(2)
+        .payload("INIT started");
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*First sending RequestGameStart to handle of smart contract (RequestGameStarted) */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Game in waiting"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*Second RequestGameStart sent*/
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Game started OK"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*Third RequestGameStart sent*/
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Error, game is already exist"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+}
+
+#[test]
+fn error_messages_same_playerid(){
+    let sys = System::new();
+    sys.init_logger();
+    let program = Program::current(&sys);
+    /* INIT MESSAGE */
+    let res=program.send(2,());
+    let expected_log= Log::builder()
+        .dest(2)
+        .payload("INIT started");
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*First sending RequestGameStart to handle of smart contract (RequestGameStarted) */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Game in waiting"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+    /*******************************************************************************/
+    /*Second sending RequestGameStart with the same playerid */
+    let game_started_test: RequestGameStart = RequestGameStart{
+        game_id:123,                                                        //Id del juego
+        player_bet:30,                                                      //Apuesta del jugador
+        player1:ActorId::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    let response_out=ChessMessageOut::ResponseString(String::from("Error, same player ID for both players"));
+    let res=program.send(2, ChessMessageIn::RequestStartGame(game_started_test));
+    //Evaluate result
+    let expected_log=Log::builder()
+        .dest(2)
+        .payload(Some(response_out));
+    assert!(res.contains(&expected_log));
+}
+
+
+/*fn with_message_out() {
     let sys = System::new();
     sys.init_logger();
     let program = Program::current(&sys);
@@ -88,8 +313,8 @@ fn with_message_out() {
         .dest(2)
         .payload(Some(response_out));
     assert!(res.contains(&expected_log));
-
     }
+    */
 
 /*
 #[test]

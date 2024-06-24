@@ -18,7 +18,6 @@ impl Metadata for ProgramMetadata {
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
 pub enum ChessMessageIn {
-    RequestBalance(u64),
     RequestStartGame(RequestGameStart),
     StatusGameId(u64),
     EndGame(GameEnd),
@@ -31,12 +30,6 @@ pub enum ChessMessageOut {
 //    ResponseStatusGame(StatusGame),
     ResponseBoardStatus(GameStarted),
 }
-/* 
-#[derive(Encode, Decode, TypeInfo, Debug)]
-pub enum ReturnCodes{
-    ReturnOk,
-    ReturnInsufficientBalance,
-}*/
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
 pub enum ResultEnd{
@@ -48,6 +41,7 @@ pub enum ResultEnd{
 #[derive(Encode, Decode, TypeInfo, Debug)]
 pub enum StatusGame{
     Started,
+    Waiting,
     Ended,
 }
 
@@ -55,6 +49,7 @@ impl Clone for StatusGame {
     fn clone(&self) -> Self {
         match self {
             StatusGame::Started=>StatusGame::Started,
+            StatusGame::Waiting=>StatusGame::Waiting,
             StatusGame::Ended=>StatusGame::Ended,
         }
     }
@@ -64,7 +59,7 @@ impl Clone for StatusGame {
 pub struct RequestGameStart{
     pub game_id: u64,
     pub player_bet: u64,
-    pub player2: ActorId,
+    pub player1: ActorId,
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
