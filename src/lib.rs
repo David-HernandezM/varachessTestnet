@@ -16,14 +16,13 @@ extern "C" fn init() {
 extern "C" fn handle() {
     //debug!(" **Starting handle");
     let action: ChessMessageIn = msg::load().expect("Error in msg::load (handle)");
-    let message_response:String;
+    let mut message_response:String= String::from("");
     let message_out: Option<ChessMessageOut>;
     let mut balance_game:u128 = 0;
-    let my_balance=exec::value_available();
     //debug!("  ** This is my balance: {:?}", my_balance);
-
+    
     match action {
-       ChessMessageIn::StatusGameId(request_game_id)=>{
+        ChessMessageIn::StatusGameId(request_game_id)=>{
             //game_id = find_game_status_into_vector(request_game_id);
             if let Some(game_ref)=find_game_into_vector(request_game_id){
                 //debug!(" ** Juego encontrado");
@@ -45,7 +44,7 @@ extern "C" fn handle() {
                 message_out = Some(ChessMessageOut::ResponseString(String::from("Game_id Not found")));
             }
        }
-       ChessMessageIn::RequestStartGame(request_game_start) => {
+        ChessMessageIn::RequestStartGame(request_game_start) => {
             let res = find_modify_or_add_game(request_game_start);
             //debug!("  **  El valor de res es : {:?}",res);
             match res{
@@ -68,41 +67,59 @@ extern "C" fn handle() {
             }
            message_out = Some(ChessMessageOut::ResponseString(message_response));
        }
-       ChessMessageIn::EndGame(end_game) => {
-            let res = end_game_into_vector(end_game.game_id);
+        ChessMessageIn::EndGame(end_game) => {
+            let res = end_game_into_vector(end_game.game_id,msg::source().clone());
             //debug!(" El resultado es: {:?}",res);
             //unsafe {debug!(" ** Despues del end, CHESS_STATE: {:?}",CHESS_STATE);};
             match res.status_end_game{
                 EndGameReturnCodes::GameEndOk=>{
                     match end_game.result_game{
                         ResultEnd::Win=>{
+                            if res.player1 == msg::source(){
+                                //Send message to player 2 "lose"
+                                //debug!(" Win player1, player2: {:?}",res.player2);
+                                let _ = msg::send(res.player2,String::from("Game end OK to Lose"),0).expect("Error in send message Lose to player2");
+                            }
+                            else{
+                                //debug!(" win player2, player1: {:?}",res.player1);
+                                let _ = msg::send(res.player1,String::from("Game end OK to Lose"),0).expect("Error in send message Lose to player1");
+                            }
                             message_response=String::from("Game end OK to Win");
                             balance_game=res.game_bet*2;
-                            //debug!(" **  Win and Bet: {:?}",res.game_bet);
                         }
                         ResultEnd::Lose=>{
+                            if res.player1 == msg::source(){
+                                let _ = msg::send(res.player2,String::from("Game end OK to Win"),res.game_bet*2).expect("Error in send message Win to player2");
+                            }
+                            else{
+                                let _ = msg::send(res.player1,String::from("Game end OK to Win"),res.game_bet*2).expect("Error in send message Win to player1");
+                            }
                             message_response=String::from("Game end OK to Lose");
                             balance_game=0;
-                            //debug!("  **  Lose and Bet: {:?}",res.game_bet);
                         }
                         ResultEnd::Draw=>{
+                            if res.player1 == msg::source(){
+                                let _ = msg::send(res.player2, String::from("Game end OK to Draw"), res.game_bet).expect("Error in sed message, DRAW to player2");
+                            }
+                            else{
+                                let _ = msg::send(res.player1, String::from("Game end OK to Draw"), res.game_bet).expect("Error in sed message, DRAW to player1");
+                            }
                             message_response=String::from("Game end OK to Draw");
-                            let _ = msg::send(res.player1, message_response.clone(), res.game_bet);
-                            let _ = msg::send(res.player2, message_response.clone(), res.game_bet);
-                            balance_game=0;
-                            //debug!(" **  Draw and Bet: {:?}",res.game_bet);
+                            balance_game=res.game_bet;
                         }
                     }
                 }
                 EndGameReturnCodes::GamePrevFinish=>{message_response=String::from("Error, The game had already been finished")}
                 EndGameReturnCodes::GameNotFound=>{message_response=String::from("Error, game not found")}
                 EndGameReturnCodes::NoGames=>{message_response=String::from("Error, there are no games")}
+                EndGameReturnCodes::PlayerError=>{message_response=String::from("Error, playerId different to players into the game")}
            }
            message_out = Some(ChessMessageOut::ResponseString(message_response));
        }
    }
-   //debug!(" ** message_out: {:?}",message_out);
-   msg::reply(message_out,balance_game).expect("Error in reply handle");
+   //let my_balance=exec::value_available();
+   //debug!(" ** message_out: {:?}, and balance: {:?}, and balance_game: {:?}",message_out, my_balance,balance_game);
+   msg::reply(message_out.unwrap(),balance_game).expect("Error in reply handle");
 
 }
  
@@ -173,20 +190,25 @@ pub fn find_game_into_vector<'a>(game_id_to_find: u64) -> Option<&'a GameStarted
 }
 
 //Function to end games into the games Vector
-pub fn end_game_into_vector(game_id_change: u64) -> ReturnEndGame{
-    //let code_return:EndGameReturnCodes;
+pub fn end_game_into_vector(game_id_change: u64,player_source:ActorId) -> ReturnEndGame{
     let code_return:ReturnEndGame;
-    //let mut bet_game = u64=0;
     let chess_state:Option<ChessState> =  unsafe {
         mem::replace(&mut CHESS_STATE,None )
     };
     match chess_state{
         Some(mut chess_state)=>{
-            if let Some(game) = chess_state.games.iter_mut().find(|game| game.game_id == game_id_change) {
-                //debug!(" ** Juego encontrado: {:?}",game_id_change);
-                if let StatusGame::Started = game.game_status {
-                    game.game_status=StatusGame::Ended;
-                  //  debug!(" ** El estatus ha sido cambiado correctamente");
+            if let Some(game) = chess_state.games.iter_mut().find(|game| game.game_id == game_id_change) { //game find
+                if let StatusGame::Started = game.game_status {                                     //Validate correct game status
+                    if game.game_player1!=player_source && game.game_player2!=player_source{        //Validate that the messasge origin from correct player into the game
+                        code_return = ReturnEndGame{
+                            status_end_game:EndGameReturnCodes::PlayerError,
+                            game_bet:game.game_bet,
+                            player1:game.game_player1,
+                            player2:game.game_player2,
+                        };
+                        return code_return;
+                    }
+                    game.game_status=StatusGame::Ended;                                             //Change status game from waiting to Ended
                     code_return = ReturnEndGame {
                         status_end_game:EndGameReturnCodes::GameEndOk,
                         game_bet:game.game_bet,
@@ -194,7 +216,7 @@ pub fn end_game_into_vector(game_id_change: u64) -> ReturnEndGame{
                         player2:game.game_player2,
                     }
                 }else {
-                //    debug!(" ** El juego ya había sido finalizado");
+                //    debug!(" ** El juego ya había sido finalizado"); 
                     code_return = ReturnEndGame{
                         status_end_game:EndGameReturnCodes::GamePrevFinish,
                         game_bet:0,
@@ -234,7 +256,7 @@ pub fn find_modify_or_add_game(game_to_add:RequestGameStart)-> StartGameReturnCo
                     return StartGameReturnCodes::PlayerError;
                 }
                 if game.game_bet != game_to_add.player_bet{
-                    debug!("  ** Error, apuesta distinta");
+                    //debug!("  ** Error, apuesta distinta");
                     return StartGameReturnCodes::BetError;
                 }
                 match game.game_status {
@@ -299,6 +321,7 @@ pub enum EndGameReturnCodes{
     GamePrevFinish,
     GameNotFound,
     NoGames,
+    PlayerError,
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
