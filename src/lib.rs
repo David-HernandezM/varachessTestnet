@@ -1,19 +1,35 @@
 #![no_std]
+use collections::BTreeMap;
 //use gstd::{debug, mem::replace, msg, prelude::*, ActorId};
 use gcore::exec;
-use gstd::{debug, msg, prelude::*, ActorId};
+use gstd::{debug, msg, prelude::*, ActorId, collections::BTreeMap};
+use signless::ContractSignlessAccounts;
 use varachess_io::*;
 
 static mut CHESS_STATE: Option<ChessState> = None;
 
 #[no_mangle]
 extern "C" fn init() {
+    unsafe {
+        CHESS_STATE = Some(
+            ChessState {
+                games: Vec::new(),
+                signless_data: ContractSignlessAccounts {
+                    signless_accounts_address_by_no_wallet_name: BTreeMap::new(),
+                    signless_accounts_address_by_user_address: BTreeMap::new(),
+                    signless_data_by_signless_address: BTreeMap::new()
+                }
+            }
+        );
+    };
+
     msg::reply("INIT started", 0).expect("Error in INIT reply");
     //debug!(" ** Estoy en INIT")
 }
 
 #[no_mangle]
 extern "C" fn handle() {
+    
     //debug!(" **Starting handle");
     let action: ChessMessageIn = msg::load().expect("Error in msg::load (handle)");
     let mut message_response:String= String::from("");

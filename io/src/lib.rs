@@ -5,6 +5,10 @@ use gstd::{prelude::*, ActorId};
 //use gmeta::{In, InOut, Metadata, Out};
 use gmeta::{InOut, Metadata, Out};
 use scale_info::TypeInfo;
+
+pub mod signless;
+use signless::ContractSignlessAccounts;
+
 pub struct ProgramMetadata;
 
 impl Metadata for ProgramMetadata {
@@ -13,7 +17,8 @@ impl Metadata for ProgramMetadata {
     type Reply = ();
     type Others = ();
     type Signal = ();
-    type State = Out<ChessState>;
+    type State = InOut<ChessStateQuery, ChessStateReply>;
+    // type State = Out<ChessState>;
 }
 
 #[derive(Encode, Decode, TypeInfo, Debug)]
@@ -81,6 +86,7 @@ pub struct GameEnd{
 #[derive(Encode, Decode, TypeInfo, Debug)]
 pub struct ChessState {
     pub games: Vec<GameStarted>,
+    pub signless_data: ContractSignlessAccounts
 }
 
 impl ChessState {
@@ -97,4 +103,25 @@ impl ChessState {
         };
         self.games.push(new_game);
     }
+}
+
+
+#[derive(Encode, Decode, TypeInfo, Clone)]
+#[codec(crate = gstd::codec)]
+#[scale_info(crate = gstd::scale_info)]
+pub enum ChessStateQuery {
+    SignlessAccountAddressForAddress(ActorId),
+    SignlessAccountAddressForNoWalletAccount(NoWalletSessionId),
+    SignlessAccountData(ActorId)
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone)]
+#[codec(crate = gstd::codec)]
+#[scale_info(crate = gstd::scale_info)]
+pub enum ChessStateReply {
+    SignlessAccountAddressForAddress(Option<ActorId>),
+    SignlessAccountAddressForNoWalletAccount(Option<ActorId>),
+    SignlessAccountData(Option<SignlessAccount>),
+    VirtualContractIdDoesNotExists(VirtualContractId),
+    UserIsNotRegistered
 }
