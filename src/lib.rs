@@ -1,6 +1,4 @@
 #![no_std]
-use core::error;
-
 //use gstd::{debug, mem::replace, msg, prelude::*, ActorId};
 use gcore::exec;
 use gstd::{debug, msg, prelude::*, ActorId, collections::BTreeMap};
@@ -34,7 +32,7 @@ extern "C" fn handle() {
     //debug!(" **Starting handle");
     let action: ChessMessageIn = msg::load().expect("Error in msg::load (handle)");
     let mut message_response:String= String::from("");
-    let message_out: Option<ChessMessageOut>;
+    let mut message_out: Option<ChessMessageOut> = None;
     let mut balance_game:u128 = 0;
     //debug!("  ** This is my balance: {:?}", my_balance);
     
@@ -149,7 +147,7 @@ extern "C" fn handle() {
             let caller = msg::source();
 
             if user_address.is_some() {
-                let address = match state.signless_data.get_user_address(caller, user_current_address) {
+                let address = match state.signless_data.get_user_address(caller, user_address) {
                     Ok(address) => address,
                     Err(error_message) => {
                         let response = ChessMessageOut::SignlessMessage(
@@ -252,6 +250,7 @@ extern "C" fn handle() {
 
             msg::reply(response, 0)
                 .expect("Error sending reply");
+            return;
         },
         ChessMessageIn::BindSignlessDataToNoWalletAccount { 
             no_wallet_account, 
@@ -280,6 +279,7 @@ extern "C" fn handle() {
 
             msg::reply(response, 0)
                 .expect("Error sending reply");
+            return;
         }
    }
    //let my_balance=exec::value_available();
