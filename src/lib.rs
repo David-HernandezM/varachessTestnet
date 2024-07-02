@@ -1,12 +1,13 @@
 #![no_std]
-use collections::BTreeMap;
+use core::error;
+
 //use gstd::{debug, mem::replace, msg, prelude::*, ActorId};
 use gcore::exec;
 use gstd::{debug, msg, prelude::*, ActorId, collections::BTreeMap};
 use signless::ContractSignlessAccounts;
 use varachess_io::*;
 
-static mut CHESS_STATE: Option<ChessState> = None;
+pub static mut CHESS_STATE: Option<ChessState> = None;
 
 #[no_mangle]
 extern "C" fn init() {
@@ -40,7 +41,7 @@ extern "C" fn handle() {
     match action {
         ChessMessageIn::StatusGameId(request_game_id)=>{
             //game_id = find_game_status_into_vector(request_game_id);
-            if let Some(game_ref)=find_game_into_vector(request_game_id){
+            if let Some(game_ref) = find_game_into_vector(request_game_id){
                 //debug!(" ** Juego encontrado");
                 //debug!(" ** game_ref: {:?}",game_ref);
                 //debug!(" ** Pasando a valor propio");
@@ -60,7 +61,60 @@ extern "C" fn handle() {
                 message_out = Some(ChessMessageOut::ResponseString(String::from("Game_id Not found")));
             }
        }
-        ChessMessageIn::RequestStartGame(request_game_start) => {
+        // ChessMessageIn::RequestStartGame(request_game_start) => {
+        ChessMessageIn::RequestStartGame { 
+            request_game_start, 
+            message_data 
+        } => {
+            let state = state_ref();
+
+            let (user_address, no_wallet) = message_data;
+
+            let caller = msg::source();
+
+            if user_address.is_some() {
+                let address = match state.signless_data.get_user_address(caller, user_address) {
+                    Ok(address) => address,
+                    Err(error_message) => {
+                        let response = ChessMessageOut::SignlessMessage(
+                            ContractSinglessMessage::Error(error_message)
+                        );
+                        msg::reply(response, 0)
+                            .expect("error sending reply");
+                        return;
+                    }
+                };
+
+                if address != request_game_start.player1 {
+                    let response = ChessMessageOut::InvalidSignlessSession;
+                    msg::reply(response, 0)
+                        .expect("error sending reply");
+                    return;
+                }
+            } else if let Some(current_no_wallet) = no_wallet {
+                if let Err(error_message) = state
+                    .signless_data
+                    .check_signless_address_by_no_wallet_account(
+                        caller, 
+                        current_no_wallet
+                ) {
+                    let response = ChessMessageOut::SignlessMessage(
+                        ContractSinglessMessage::Error(error_message)
+                    );
+                    msg::reply(response, 0)
+                        .expect("error sending reply");
+                    return;
+                }
+
+                if caller != request_game_start.player1 {
+                    let response = ChessMessageOut::InvalidSignlessSession;
+                    msg::reply(response, 0)
+                        .expect("error sending reply");
+                    return;
+                }
+            }
+            
+
             let res = find_modify_or_add_game(request_game_start);
             //debug!("  **  El valor de res es : {:?}",res);
             match res{
@@ -83,7 +137,45 @@ extern "C" fn handle() {
             }
            message_out = Some(ChessMessageOut::ResponseString(message_response));
        }
-        ChessMessageIn::EndGame(end_game) => {
+        // ChessMessageIn::EndGame(end_game) => {
+        ChessMessageIn::EndGame { 
+            end_game, 
+            message_data 
+        } => {
+            let state = state_ref();
+
+            let (user_address, no_wallet) = message_data;
+
+            let caller = msg::source();
+
+            if user_address.is_some() {
+                let address = match state.signless_data.get_user_address(caller, user_current_address) {
+                    Ok(address) => address,
+                    Err(error_message) => {
+                        let response = ChessMessageOut::SignlessMessage(
+                            ContractSinglessMessage::Error(error_message)
+                        );
+                        msg::reply(response, 0)
+                            .expect("error sending reply");
+                        return;
+                    }
+                };
+            } else if let Some(current_no_wallet) = no_wallet {
+                if let Err(error_message) = state
+                    .signless_data
+                    .check_signless_address_by_no_wallet_account(
+                        caller, 
+                        current_no_wallet
+                ) {
+                    let response = ChessMessageOut::SignlessMessage(
+                        ContractSinglessMessage::Error(error_message)
+                    );
+                    msg::reply(response, 0)
+                        .expect("error sending reply");
+                    return;
+                }
+            }
+
             let res = end_game_into_vector(end_game.game_id,msg::source().clone());
             //debug!(" El resultado es: {:?}",res);
             //unsafe {debug!(" ** Despues del end, CHESS_STATE: {:?}",CHESS_STATE);};
@@ -131,7 +223,64 @@ extern "C" fn handle() {
                 EndGameReturnCodes::PlayerError=>{message_response=String::from("Error, playerId different to players into the game")}
            }
            message_out = Some(ChessMessageOut::ResponseString(message_response));
-       }
+       },
+
+        ChessMessageIn::BindSignlessDataToAddress { 
+            user_address, 
+            signless_data 
+        } => {
+            let state = state_mut();
+
+            let signless_address = msg::source();
+
+            let result = state  
+                .signless_data
+                .set_signless_account_to_user_address(
+                    signless_address, 
+                    user_address, 
+                    signless_data
+                );
+            
+            let response = match result {
+                Err(signless_error) => ChessMessageOut::SignlessMessage(
+                    ContractSinglessMessage::Error(signless_error)
+                ),
+                Ok(_) => ChessMessageOut::SignlessMessage(
+                    ContractSinglessMessage::SignlessAccountSet
+                )
+            };
+
+            msg::reply(response, 0)
+                .expect("Error sending reply");
+        },
+        ChessMessageIn::BindSignlessDataToNoWalletAccount { 
+            no_wallet_account, 
+            signless_data 
+        } => {
+            let state = state_mut();
+
+            let signless_address = msg::source();
+
+            let result = state
+                .signless_data
+                .set_signless_account_to_no_wallet_name(
+                    signless_address, 
+                    no_wallet_account, 
+                    signless_data
+                );
+
+            let response = match result {
+                Err(error_message) => ChessMessageOut::SignlessMessage(
+                    ContractSinglessMessage::Error(error_message)
+                ),
+                Ok(_) => ChessMessageOut::SignlessMessage(
+                    ContractSinglessMessage::SignlessAccountSet
+                )
+            };
+
+            msg::reply(response, 0)
+                .expect("Error sending reply");
+        }
    }
    //let my_balance=exec::value_available();
    //debug!(" ** message_out: {:?}, and balance: {:?}, and balance_game: {:?}",message_out, my_balance,balance_game);
@@ -151,9 +300,81 @@ fn state_mut() -> &'static mut ChessState {
 
 #[no_mangle]
 extern "C" fn state() {
-    let chess_state = unsafe {&CHESS_STATE};
-    msg::reply(chess_state, 0).expect("Failed to share state");
+    // let chess_state = unsafe {&CHESS_STATE};
+    // msg::reply(chess_state, 0).expect("Failed to share state");
+
+    let message = msg::load()
+        .expect("Error while loading message");
+
+    let state = take_state();
+
+    match message {
+        ChessStateQuery::Games => {
+            msg::reply(ChessStateReply::Games(state.games), 0)
+                .expect("Error sending state");
+        }
+        ChessStateQuery::SignlessAccountAddressForAddress(user_address) => {
+            let signless_address = state   
+                .signless_data
+                .signless_accounts_address_by_user_address
+                .get(&user_address);
+
+            msg::reply(ChessStateReply::SignlessAccountAddress(signless_address.copied()), 0)
+                .expect("Error sending state");
+        },
+        ChessStateQuery::SignlessAccountAddressForNoWalletAccount(no_wallet_accound) => {
+            let signless_address = state
+                .signless_data
+                .signless_accounts_address_by_no_wallet_name
+                .get(&no_wallet_accound);
+
+            msg::reply(ChessStateReply::SignlessAccountAddress(signless_address.copied()), 0)
+                .expect("Error sending state");
+        },
+        ChessStateQuery::SignlessAccountData(signless_address) => {
+            let signless_data = state
+                .signless_data
+                .signless_data_by_signless_address
+                .get(&signless_address);
+
+            let response = match signless_data {
+                Some(data) => Some(data.clone()),
+                None => None
+            };
+
+            msg::reply(ChessStateReply::SignlessAccountData(response), 0)
+                .expect("Error sending state");
+        }
+    }
 }
+
+
+
+
+pub fn state_mut() -> &'static mut ChessState {
+    let state = unsafe { CHESS_STATE.as_mut() };
+    debug_assert!(state.is_some(), "State is no initialized ");
+    unsafe { state.unwrap_unchecked() }
+}
+
+pub fn state_ref() -> &'static ChessState {
+    let state = unsafe { CHESS_STATE.as_ref() };
+    debug_assert!(state.is_some(), "State is no initialized ");
+    unsafe { state.unwrap_unchecked() }
+}
+
+pub fn take_state() -> ChessState {
+    let state = unsafe { CHESS_STATE.take() };
+    debug_assert!(state.is_some(), "State is not initialized");
+    unsafe { state.unwrap_unchecked() }
+}
+
+
+
+
+
+
+
 
 //Function to add games to the games Vector
 pub fn add_game_to_vector(game_to_add :&RequestGameStart,player1:ActorId) {
@@ -174,7 +395,15 @@ pub fn add_game_to_vector(game_to_add :&RequestGameStart,player1:ActorId) {
         }
         None => {
             unsafe{
-                let chess_state = CHESS_STATE.get_or_insert(ChessState{games:Vec::new()});
+                let chess_state = CHESS_STATE.get_or_insert(ChessState {
+                    games: Vec::new(),
+                    signless_data: ContractSignlessAccounts {
+                        signless_accounts_address_by_no_wallet_name: BTreeMap::new(),
+                        signless_accounts_address_by_user_address: BTreeMap::new(),
+                        signless_data_by_signless_address: BTreeMap::new()
+                    }
+                });
+                
                 chess_state.add_game(
                     game_to_add.game_id,
                     game_to_add.player_bet,
@@ -265,6 +494,7 @@ pub fn end_game_into_vector(game_id_change: u64,player_source:ActorId) -> Return
 }
 
 pub fn find_modify_or_add_game(game_to_add:RequestGameStart)-> StartGameReturnCodes{
+
     unsafe {
         if let Some(chess_state) = CHESS_STATE.as_mut() {
             if let Some(game) = chess_state.games.iter_mut().find(|g| g.game_id == game_to_add.game_id) {
@@ -308,7 +538,14 @@ pub fn find_modify_or_add_game(game_to_add:RequestGameStart)-> StartGameReturnCo
             // CHESS_STATE es None
             //debug!(" ** Chess_state is None");
             //unsafe{
-                let chess_state = CHESS_STATE.get_or_insert(ChessState{games:Vec::new()});
+                let chess_state = CHESS_STATE.get_or_insert(ChessState {
+                    games: Vec::new(),
+                    signless_data: ContractSignlessAccounts {
+                        signless_accounts_address_by_no_wallet_name: BTreeMap::new(),
+                        signless_accounts_address_by_user_address: BTreeMap::new(),
+                        signless_data_by_signless_address: BTreeMap::new()
+                    }
+                });
                 chess_state.add_game(
                     game_to_add.game_id,
                     game_to_add.player_bet,
